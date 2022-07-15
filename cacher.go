@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-var (
-	emptyCache = make(map[interface{}]CacheItem, 0)
-)
-
 // 缓存器
 type Cacher struct {
 	cache        map[interface{}]CacheItem
@@ -31,13 +27,13 @@ func NewCacher(maxLength int) *Cacher {
 	}
 
 	return &Cacher{
-		cache:        emptyCache,
+		cache:        make(map[interface{}]CacheItem, maxLength),
 		maxLength:    maxLength,
 	}
 }
 
 // 添加/更新一个缓存项
-func (c *Cacher) Update(key, value interface{}) {
+func (c *Cacher) Set(key, value interface{}) {
 	// key存在，更新
 	c.lock.RLock()
 	item, have := c.cache[key]
@@ -125,7 +121,7 @@ func (c *Cacher) Delete(key interface{}) {
 // 清空
 func (c *Cacher) Clear() {
 	c.lock.Lock()
-	c.cache = emptyCache
+	c.cache = make(map[interface{}]CacheItem, c.maxLength)
 	c.lock.Unlock()
 }
 
@@ -137,10 +133,12 @@ func (c *Cacher) Len() int {
 }
 
 // 获取所有缓存项
-func (c *Cacher) All() []interface{} {
+func (c *Cacher) Values() []interface{} {
 	items := []interface{}{}
+	c.lock.RLock()
 	for _, item := range c.cache {
 		items = append(items, item.value)
 	}
+	c.lock.RUnlock()
 	return items
 }
