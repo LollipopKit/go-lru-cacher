@@ -132,7 +132,7 @@ func (c *Cacher) Len() int {
 	return len(c.cache)
 }
 
-// 获取所有缓存项
+// 获取所有值
 func (c *Cacher) Values() []interface{} {
 	items := []interface{}{}
 	c.lock.RLock()
@@ -141,4 +141,15 @@ func (c *Cacher) Values() []interface{} {
 	}
 	c.lock.RUnlock()
 	return items
+}
+
+// 获取所有键
+func (c *Cacher) Keys() []interface{} {
+	keys := []interface{}{}
+	c.lock.RLock()
+	for key := range c.cache {
+		keys = append(keys, key)
+	}
+	c.lock.RUnlock()
+	return keys
 }

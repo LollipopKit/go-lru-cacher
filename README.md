@@ -6,10 +6,11 @@
 package main
 
 func main() {
+    // 创建一个最大容量为 10 的 LRU 缓存器
     cacher := NewCacher(10)
     // 将键值对放入缓存器
-    cacher.Update("foo", "bar")
-    cacher.Update("foo2", "bar2")
+    cacher.Set("foo", "bar")
+    cacher.Set("foo2", "bar2")
     // 获取键值对
     cacher.Get("foo2") // "bar2"
     // 获取长度
@@ -17,6 +18,10 @@ func main() {
     // 删除键值对
     cacher.Delete("foo")
     // 获取所有值
-    cacher.All() // []string{"bar2"}
+    cacher.Values() // []interface{}{"bar2"}
+    // 获取所有键
+    cacher.Keys() // []string{"foo2"}
+    // 清空缓存器
+    cacher.Clear()
 }
 ```
