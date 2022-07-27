@@ -51,9 +51,7 @@ func (c *Cacher) Set(key, value interface{}) {
 
 	// key不存在，添加
 START:
-	c.lock.RLock()
-	full := len(c.cache) >= c.maxLength
-	c.lock.RUnlock()
+	full := c.Len() >= c.maxLength
 
 	if !full {
 		c.lock.Lock()
@@ -105,10 +103,8 @@ func (c *Cacher) Get(key interface{}) (interface{}, bool) {
 		c.lock.Lock()
 		c.cache[key] = item
 		c.lock.Unlock()
-
-		return item.value, true
 	}
-	return nil, false
+	return item.value, ok
 }
 
 // 删除缓存项
