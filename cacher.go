@@ -5,11 +5,15 @@ import (
 	"time"
 )
 
+const (
+	MaxInt = int(^uint(0) >> 1)
+)
+
 // 缓存器
 type Cacher struct {
-	cache        map[interface{}]CacheItem
-	lock         sync.RWMutex
-	maxLength    int
+	cache     map[interface{}]CacheItem
+	lock      sync.RWMutex
+	maxLength int
 }
 
 // 缓存项
@@ -27,8 +31,8 @@ func NewCacher(maxLength int) *Cacher {
 	}
 
 	return &Cacher{
-		cache:        make(map[interface{}]CacheItem, maxLength),
-		maxLength:    maxLength,
+		cache:     make(map[interface{}]CacheItem, maxLength),
+		maxLength: maxLength,
 	}
 }
 
@@ -41,7 +45,9 @@ func (c *Cacher) Set(key, value interface{}) {
 	if have {
 		item.value = value
 		item.LastUsedTime = time.Now()
-		item.UsedTimes++
+		if item.UsedTimes < MaxInt {
+			item.UsedTimes++
+		}
 
 		c.lock.Lock()
 		c.cache[key] = item
@@ -49,7 +55,9 @@ func (c *Cacher) Set(key, value interface{}) {
 		return
 	}
 
-	// key不存在，添加
+	// key不存在，添加。
+	// 因为每次插入时都会检查是否已满，所以每次插入时，最多需要清除一个缓存项。
+	// 不需要一个deleteList，在一次for内删除掉所有过期的缓存项。
 START:
 	full := c.Len() >= c.maxLength
 
@@ -67,17 +75,19 @@ START:
 		var lastKey interface{}
 
 		c.lock.RLock()
-		for key, value := range c.cache {
-			lastTime = value.LastUsedTime
-			usedTimes = value.UsedTimes
+		// 先使用一次for循环，而不是只有一个for
+		// 这样性能反而更好
+		for key, item := range c.cache {
+			lastTime = item.LastUsedTime
+			usedTimes = item.UsedTimes
 			lastKey = key
 			break
 		}
-		for idx, item := range c.cache {
+		for key, item := range c.cache {
 			if item.LastUsedTime.Before(lastTime) && item.UsedTimes <= usedTimes {
 				lastTime = item.LastUsedTime
 				usedTimes = item.UsedTimes
-				lastKey = idx
+				lastKey = key
 			}
 		}
 		c.lock.RUnlock()
@@ -98,7 +108,9 @@ func (c *Cacher) Get(key interface{}) (interface{}, bool) {
 
 	if ok {
 		item.LastUsedTime = time.Now()
-		item.UsedTimes++
+		if item.UsedTimes < MaxInt {
+			item.UsedTimes++
+		}
 
 		c.lock.Lock()
 		c.cache[key] = item
@@ -130,8 +142,8 @@ func (c *Cacher) Len() int {
 
 // 获取所有值
 func (c *Cacher) Values() []interface{} {
-	items := []interface{}{}
 	c.lock.RLock()
+	items := make([]interface{}, 0, len(c.cache))
 	for _, item := range c.cache {
 		items = append(items, item.value)
 	}
@@ -141,8 +153,8 @@ func (c *Cacher) Values() []interface{} {
 
 // 获取所有键
 func (c *Cacher) Keys() []interface{} {
-	keys := []interface{}{}
 	c.lock.RLock()
+	keys := make([]interface{}, 0, len(c.cache))
 	for key := range c.cache {
 		keys = append(keys, key)
 	}

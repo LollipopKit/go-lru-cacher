@@ -1,8 +1,8 @@
 package cacher_test
 
 import (
-	"testing"
 	glc "git.lolli.tech/lollipopkit/go_lru_cacher"
+	"testing"
 )
 
 const (
@@ -45,16 +45,27 @@ func Test(t *testing.T) {
 		t.Error("cacher.Len() != 0")
 	}
 
-	for i := 0; i < maxLength + 2; i++ {
+	for i := 0; i < maxLength+2; i++ {
 		cacher.Set(i, i)
 	}
 	if cacher.Len() != maxLength {
 		t.Error("cacher.Len() != maxLength")
 	}
-	for i := 2; i < maxLength + 2; i++ {
-		if v, ok := cacher.Get(i); !ok {
-			t.Log(i, v)
+	// 因为Set了102次，maxLength为100
+	// 所以idx：0、1会被覆盖，所以从idx：2开始
+	for i := 2; i < maxLength+2; i++ {
+		if _, ok := cacher.Get(i); !ok {
+			t.Log(i)
 			t.Error("cacher.Get(i) not ok")
 		}
+	}
+}
+
+func Benchmark(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		cacher.Set(i, i)
+	}
+	for i := 0; i < b.N; i++ {
+		cacher.Get(i)
 	}
 }
