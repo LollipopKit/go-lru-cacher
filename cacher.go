@@ -11,14 +11,14 @@ const (
 
 // 缓存器
 type Cacher struct {
-	cache     map[interface{}]CacheItem
+	cache     map[any]CacheItem
 	lock      sync.RWMutex
 	maxLength int
 }
 
 // 缓存项
 type CacheItem struct {
-	value        interface{}
+	value        any
 	LastUsedTime time.Time
 	UsedTimes    int
 }
@@ -31,13 +31,13 @@ func NewCacher(maxLength int) *Cacher {
 	}
 
 	return &Cacher{
-		cache:     make(map[interface{}]CacheItem, maxLength),
+		cache:     make(map[any]CacheItem, maxLength),
 		maxLength: maxLength,
 	}
 }
 
 // 添加/更新一个缓存项
-func (c *Cacher) Set(key, value interface{}) {
+func (c *Cacher) Set(key, value any) {
 	// key存在，更新
 	c.lock.RLock()
 	item, have := c.cache[key]
@@ -72,7 +72,7 @@ START:
 	} else {
 		var lastTime time.Time
 		var usedTimes int
-		var lastKey interface{}
+		var lastKey any
 
 		c.lock.RLock()
 		// 先使用一次for循环，而不是只有一个for
@@ -101,7 +101,7 @@ START:
 }
 
 // 获取一个缓存项
-func (c *Cacher) Get(key interface{}) (interface{}, bool) {
+func (c *Cacher) Get(key any) (any, bool) {
 	c.lock.RLock()
 	item, ok := c.cache[key]
 	c.lock.RUnlock()
@@ -120,7 +120,7 @@ func (c *Cacher) Get(key interface{}) (interface{}, bool) {
 }
 
 // 删除缓存项
-func (c *Cacher) Delete(key interface{}) {
+func (c *Cacher) Delete(key any) {
 	c.lock.Lock()
 	delete(c.cache, key)
 	c.lock.Unlock()
@@ -129,7 +129,7 @@ func (c *Cacher) Delete(key interface{}) {
 // 清空
 func (c *Cacher) Clear() {
 	c.lock.Lock()
-	c.cache = make(map[interface{}]CacheItem, c.maxLength)
+	c.cache = make(map[any]CacheItem, c.maxLength)
 	c.lock.Unlock()
 }
 
@@ -141,9 +141,9 @@ func (c *Cacher) Len() int {
 }
 
 // 获取所有值
-func (c *Cacher) Values() []interface{} {
+func (c *Cacher) Values() []any {
 	c.lock.RLock()
-	items := make([]interface{}, 0, len(c.cache))
+	items := make([]any, 0, len(c.cache))
 	for _, item := range c.cache {
 		items = append(items, item.value)
 	}
@@ -152,12 +152,22 @@ func (c *Cacher) Values() []interface{} {
 }
 
 // 获取所有键
-func (c *Cacher) Keys() []interface{} {
+func (c *Cacher) Keys() []any {
 	c.lock.RLock()
-	keys := make([]interface{}, 0, len(c.cache))
+	keys := make([]any, 0, len(c.cache))
 	for key := range c.cache {
 		keys = append(keys, key)
 	}
 	c.lock.RUnlock()
 	return keys
+}
+
+func (c *Cacher) Map() map[any]any {
+	c.lock.RLock()
+	m := make(map[any]any, len(c.cache))
+	for key, item := range c.cache {
+		m[key] = item.value
+	}
+	defer c.lock.RUnlock()
+	return m
 }

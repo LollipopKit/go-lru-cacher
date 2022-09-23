@@ -1,8 +1,10 @@
 package cacher_test
 
 import (
-	glc "git.lolli.tech/lollipopkit/go_lru_cacher"
+	"fmt"
 	"testing"
+
+	glc "git.lolli.tech/lollipopkit/go_lru_cacher"
 )
 
 const (
@@ -44,6 +46,10 @@ func Test(t *testing.T) {
 	if cacher.Len() != 0 {
 		t.Error("cacher.Len() != 0")
 	}
+	
+	cacher.Set("key", "value")
+	fmt.Printf("%#v\n", cacher.Map())
+	cacher.Clear()
 
 	for i := 0; i < maxLength+2; i++ {
 		cacher.Set(i, i)
