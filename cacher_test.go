@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	glc "git.lolli.tech/lollipopkit/go_lru_cacher"
+	glc "git.lolli.tech/lollipopkit/go-lru-cacher"
 )
 
 const (
@@ -67,11 +67,33 @@ func Test(t *testing.T) {
 	}
 }
 
-func Benchmark(b *testing.B) {
+type test struct {
+	k string
+	v string
+	t string
+	id int64
+}
+
+var t = test{
+	k: "key",
+	v: "value",
+	t: "type",
+	id: 1,
+}
+
+func bench(item any, b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		cacher.Set(i, i)
+		cacher.Set(i, item)
 	}
 	for i := 0; i < b.N; i++ {
-		cacher.Get(i)
+		cacher.Get(item)
 	}
+}
+
+func BenchmarkInt(b *testing.B) {
+	bench(1, b)
+}
+
+func BenchmarkStruct(b *testing.B) {
+	bench(t, b)
 }
