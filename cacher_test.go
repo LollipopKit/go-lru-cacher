@@ -46,7 +46,7 @@ func Test(t *testing.T) {
 	if cacher.Len() != 0 {
 		t.Error("cacher.Len() != 0")
 	}
-	
+
 	cacher.Set("key", "value")
 	fmt.Printf("%#v\n", cacher.Map())
 	cacher.Clear()
@@ -68,16 +68,16 @@ func Test(t *testing.T) {
 }
 
 type test struct {
-	k string
-	v string
-	t string
+	k  string
+	v  string
+	t  string
 	id int64
 }
 
 var t = test{
-	k: "key",
-	v: "value",
-	t: "type",
+	k:  "key",
+	v:  "value",
+	t:  "type",
 	id: 1,
 }
 

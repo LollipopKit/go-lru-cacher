@@ -13,23 +13,23 @@ const (
 type cacher struct {
 	cache     map[any]*cacheItem
 	lock      *sync.RWMutex
-	maxLength uint
+	maxLength uint32
 }
 
 // 缓存项
 type cacheItem struct {
-	value        any
-	LastUsedTime time.Time
-	UsedTimes    uint32
+	value    any
+	lastTime time.Time
+	times    uint32
 }
 
 // 创建一个缓存器
 // maxLength: 最大缓存长度
-func NewCacher(maxLength uint) *cacher {
+func NewCacher(maxLength uint32) *cacher {
 	if maxLength == 0 {
-		maxLength = 100
+		panic("maxLength must be greater than 0")
 	}
-	
+
 	return &cacher{
 		cache:     make(map[any]*cacheItem, maxLength),
 		maxLength: maxLength,
@@ -45,9 +45,9 @@ func (c *cacher) Set(key, value any) {
 	c.lock.RUnlock()
 	if have {
 		item.value = value
-		item.LastUsedTime = time.Now()
-		if item.UsedTimes < _maxUInt32 {
-			item.UsedTimes++
+		item.lastTime = time.Now()
+		if item.times < _maxUInt32 {
+			item.times++
 		}
 
 		c.lock.Lock()
@@ -60,14 +60,14 @@ func (c *cacher) Set(key, value any) {
 	// 因为每次插入时都会检查是否已满，所以每次插入时，最多需要清除一个缓存项。
 	// 不需要一个deleteList，在一次for内删除掉所有过期的缓存项。
 START:
-	full := c.Len() >= c.maxLength
+	full := uint32(c.Len()) >= c.maxLength
 
 	if !full {
 		c.lock.Lock()
 		c.cache[key] = &cacheItem{
-			value:        value,
-			LastUsedTime: time.Now(),
-			UsedTimes:    1,
+			value:    value,
+			lastTime: time.Now(),
+			times:    1,
 		}
 		c.lock.Unlock()
 	} else {
@@ -79,15 +79,15 @@ START:
 		// 先使用一次for循环，而不是只有一个for
 		// 这样性能反而更好
 		for key, item := range c.cache {
-			lastTime = item.LastUsedTime
-			usedTimes = item.UsedTimes
+			lastTime = item.lastTime
+			usedTimes = item.times
 			lastKey = key
 			break
 		}
 		for key, item := range c.cache {
-			if item.LastUsedTime.Before(lastTime) && item.UsedTimes <= usedTimes {
-				lastTime = item.LastUsedTime
-				usedTimes = item.UsedTimes
+			if item.lastTime.Before(lastTime) && item.times <= usedTimes {
+				lastTime = item.lastTime
+				usedTimes = item.times
 				lastKey = key
 			}
 		}
@@ -108,9 +108,9 @@ func (c *cacher) Get(key any) (any, bool) {
 	c.lock.RUnlock()
 
 	if ok {
-		item.LastUsedTime = time.Now()
-		if item.UsedTimes < _maxUInt32 {
-			item.UsedTimes++
+		item.lastTime = time.Now()
+		if item.times < _maxUInt32 {
+			item.times++
 		}
 
 		c.lock.Lock()
@@ -137,10 +137,10 @@ func (c *cacher) Clear() {
 }
 
 // 获取缓存项数量
-func (c *cacher) Len() uint {
+func (c *cacher) Len() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return uint(len(c.cache))
+	return len(c.cache)
 }
 
 // 获取所有值
