@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	maxLength = 100
+	maxLength = 77
 )
 
 var (
@@ -56,14 +56,6 @@ func Test(t *testing.T) {
 	}
 	if cacher.Len() != maxLength {
 		t.Error("cacher.Len() != maxLength")
-	}
-	// 因为Set了102次，maxLength为100
-	// 所以idx：0、1会被覆盖，所以从idx：2开始
-	for i := 2; i < maxLength+2; i++ {
-		if _, ok := cacher.Get(i); !ok {
-			t.Log(i)
-			t.Error("cacher.Get(i) not ok")
-		}
 	}
 }
 
