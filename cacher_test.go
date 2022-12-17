@@ -67,14 +67,12 @@ func Test(t *testing.T) {
 	}
 }
 
-type test struct {
+var t = struct {
 	k  string
 	v  string
 	t  string
 	id int64
-}
-
-var t = test{
+}{
 	k:  "key",
 	v:  "value",
 	t:  "type",

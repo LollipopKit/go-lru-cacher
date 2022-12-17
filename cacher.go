@@ -9,12 +9,7 @@ const (
 	_maxUInt32 = ^uint32(0)
 )
 
-// 缓存器
-type cacher struct {
-	cache     map[any]*cacheItem
-	lock      *sync.RWMutex
-	maxLength uint32
-}
+type caches map[any]*cacheItem
 
 // 缓存项
 type cacheItem struct {
@@ -22,6 +17,14 @@ type cacheItem struct {
 	lastTime time.Time
 	times    uint32
 }
+
+// 缓存器
+type cacher struct {
+	cache     caches
+	lock      *sync.RWMutex
+	maxLength uint32
+}
+
 
 // 创建一个缓存器
 // maxLength: 最大缓存长度
@@ -31,7 +34,7 @@ func NewCacher(maxLength uint32) *cacher {
 	}
 
 	return &cacher{
-		cache:     make(map[any]*cacheItem, maxLength),
+		cache:     make(caches, maxLength),
 		maxLength: maxLength,
 		lock:      new(sync.RWMutex),
 	}
@@ -132,7 +135,7 @@ func (c *cacher) Delete(key any) {
 // 清空
 func (c *cacher) Clear() {
 	c.lock.Lock()
-	c.cache = make(map[any]*cacheItem, c.maxLength)
+	c.cache = make(caches, c.maxLength)
 	c.lock.Unlock()
 }
 
@@ -171,6 +174,6 @@ func (c *cacher) Map() map[any]any {
 	for key, item := range c.cache {
 		m[key] = item.value
 	}
-	defer c.lock.RUnlock()
+	c.lock.RUnlock()
 	return m
 }
