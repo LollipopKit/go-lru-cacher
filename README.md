@@ -2,6 +2,7 @@
 `LRU` 算法缓存器。
 
 ### 用法
+#### 普通LRU缓存器
 ```go
 package main
 
@@ -24,4 +25,19 @@ func main() {
     // 清空缓存器
     cacher.Clear()
 }
+```
+
+#### 冷热分区LRU缓存器
+如果有一些数据一直被读写，可以使用冷热分区的缓存器，这样可以提高缓存命中率。
+```go
+NewPartedCacher(10)
+```
+其他接口与上相同
+
+#### 自动过期LRU缓存器
+```go
+// 返回一个缓存器，每经过 duration 调用一次 fn 自定义清理缓存项
+NewTimeCacher()
+// 每过 checkDuration 检查一次，间隔超过 elapsedDuration 的缓存项将被清理
+NewElapsedCacher(10, 10 * time.Minute, time.Hour)
 ```
