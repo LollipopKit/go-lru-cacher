@@ -1,8 +1,6 @@
 ## Go LRU Cacher
-`LRU` 算法缓存器。
 
-### 用法
-#### 普通LRU缓存器
+### 普通缓存器
 ```go
 package main
 
@@ -27,17 +25,24 @@ func main() {
 }
 ```
 
-#### 冷热分区LRU缓存器
+### 冷热分区缓存器
 如果有一些数据一直被读写，可以使用冷热分区的缓存器，这样可以提高缓存命中率。
 ```go
 NewPartedCacher(10)
 ```
 其他接口与上相同
 
-#### 自动过期LRU缓存器
+### 超时检测缓存器
 ```go
 // 返回一个缓存器，每经过 duration 调用一次 fn 自定义清理缓存项
-NewTimeCacher()
+// 例：每过一小时，清理超过一小时未访问的缓存项
+NewTimeCacher(10, time.Hour, func(key string, item *cacheItem) {
+    if item.lastTime - time.Now().Nanoseconds() > 1000 * 1000 * 1000 * 60 * 60 {
+        return true
+    }
+})
 // 每过 checkDuration 检查一次，间隔超过 elapsedDuration 的缓存项将被清理
+// 例：每过十分钟，清理超过一小时未访问的缓存项
 NewElapsedCacher(10, 10 * time.Minute, time.Hour)
 ```
+其他接口与上相同
