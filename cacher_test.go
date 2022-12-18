@@ -2,20 +2,22 @@ package cacher_test
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	glc "git.lolli.tech/lollipopkit/go-lru-cacher"
 )
 
 const (
-	maxLength = 77
+	maxLength = 7
 )
 
 var (
 	cacher = glc.NewCacher(maxLength)
+	partedCacher = glc.NewPartedCacher(maxLength)
 )
 
-func Test(t *testing.T) {
+func TestCacher(t *testing.T) {
 	cacher.Set("key", "value")
 	cacher.Set("key2", "value2")
 	if cacher.Len() != 2 {
@@ -56,6 +58,31 @@ func Test(t *testing.T) {
 	}
 	if cacher.Len() != maxLength {
 		t.Error("cacher.Len() != maxLength")
+	}
+	cacher.Get(2)
+	for i := 0; i < maxLength-1; i++ {
+		k, _, _ := cacher.Coldest()
+		cacher.Delete(k)
+	}
+	if two, ok := cacher.Get(2); two != 2 && !ok {
+		t.Log(two, ok)
+		t.Error("cacher.Get(2) != 2")
+	}
+}
+
+func TestPartedCacher(t *testing.T) {
+	for i := 0; i < maxLength - 2; i++ {
+		partedCacher.Set(i, i)
+	}
+
+	partedCacher.Get(0)
+
+	for i := 0; i < maxLength; i++ {
+		partedCacher.Set(i, i)
+	}
+
+	if reflect.DeepEqual(partedCacher.Keys(), []any{0, 5}) {
+		t.Error("partedCacher.Keys() != [0, 5]")
 	}
 }
 

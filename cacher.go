@@ -4,11 +4,7 @@ import (
 	"sync"
 )
 
-const (
-	_maxInt = int(^uint(0) >> 1)
-)
-
-type _cacheMap map[any]*cacheItem
+type cacheMap map[any]*cacheItem
 
 // 缓存项
 type cacheItem struct {
@@ -19,7 +15,7 @@ type cacheItem struct {
 
 // 缓存器
 type cacher struct {
-	caches    _cacheMap
+	caches    cacheMap
 	lock      *sync.RWMutex
 	maxLength int
 }
@@ -32,7 +28,7 @@ func NewCacher(maxLength int) *cacher {
 	}
 
 	return &cacher{
-		caches:    make(_cacheMap, maxLength),
+		caches:    make(cacheMap, maxLength),
 		maxLength: maxLength,
 		lock:      new(sync.RWMutex),
 	}
@@ -52,25 +48,10 @@ func (c *cacher) Set(key, value any) {
 
 	// key不存在，添加。
 START:
-	full := c.Len() >= c.maxLength
-
-	if full {
-		var lastTime int64
-		var usedTimes int
-		var lastKey any
-
-		c.lock.RLock()
-		for key, item := range c.caches {
-			if lastKey == nil || item.lastTime <= lastTime && item.times <= usedTimes {
-				lastTime = item.lastTime
-				usedTimes = item.times
-				lastKey = key
-			}
-		}
-		c.lock.RUnlock()
-
+	if c.IsFull() {
+		k, _, _ := c.Coldest()
 		c.lock.Lock()
-		delete(c.caches, lastKey)
+		delete(c.caches, k)
 		c.lock.Unlock()
 
 		goto START
@@ -83,6 +64,34 @@ START:
 		times:    1,
 	}
 	c.lock.Unlock()
+}
+
+// 返回最早添加、最少使用的项目的键、添加时间、使用次数
+func (c *cacher) Coldest() (lastKey any, lastTime int64, times int) {
+	c.lock.RLock()
+	for key, item := range c.caches {
+		if lastKey == nil || item.lastTime <= lastTime && item.times <= times {
+			lastTime = item.lastTime
+			times = item.times
+			lastKey = key
+		}
+	}
+	c.lock.RUnlock()
+	return
+}
+
+// 返回最晚添加、最多使用的项目的键、添加时间、使用次数
+func (c *cacher) Hotest() (lastKey any, lastTime int64, times int) {
+	c.lock.RLock()
+	for key, item := range c.caches {
+		if lastKey == nil || item.lastTime >= lastTime && item.times >= times {
+			lastTime = item.lastTime
+			times = item.times
+			lastKey = key
+		}
+	}
+	c.lock.RUnlock()
+	return
 }
 
 // 获取一个缓存项
@@ -115,13 +124,18 @@ func (c *cacher) Delete(key any) {
 // 清空
 func (c *cacher) Clear() {
 	c.lock.Lock()
-	c.caches = make(_cacheMap, c.maxLength)
+	c.caches = make(cacheMap, c.maxLength)
 	c.lock.Unlock()
 }
 
 // 获取缓存项数量
 func (c *cacher) Len() int {
 	return len(c.caches)
+}
+
+// 是否存满
+func (c *cacher) IsFull() bool {
+	return c.Len() >= c.maxLength
 }
 
 // 获取所有值
