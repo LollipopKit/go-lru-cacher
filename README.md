@@ -4,9 +4,13 @@
 ```go
 package main
 
+import (
+    glc "git.lolli.tech/lollipopkit/go-lru-cacher"
+)
+
 func main() {
     // 创建一个最大容量为 10 的 LRU 缓存器
-    cacher := NewCacher(10)
+    cacher := glc.NewCacher(10)
     // 将键值对放入缓存器
     cacher.Set("foo", "bar")
     cacher.Set("foo2", "bar2")
@@ -36,7 +40,7 @@ NewPartedCacher(10)
 ```go
 // 返回一个缓存器，每经过 duration 调用一次 fn 自定义清理缓存项
 // 例：每过一小时，清理超过一小时未访问的缓存项
-NewTimeCacher(10, time.Hour, func(key string, item *cacheItem) {
+NewDurationCacher(10, time.Hour, func(key string, item *cacheItem) {
     if item.lastTime - time.Now().Nanoseconds() > 1000 * 1000 * 1000 * 60 * 60 {
         return true
     }

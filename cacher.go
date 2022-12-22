@@ -4,13 +4,13 @@ import (
 	"sync"
 )
 
-type cacheMap map[any]*cacheItem
+type cacheMap map[any]*CacheItem
 
 // 缓存项
-type cacheItem struct {
-	value    any
-	lastTime int64
-	times    int
+type CacheItem struct {
+	Value    any
+	LastTime int64
+	Times    int
 }
 
 // 缓存器
@@ -41,7 +41,7 @@ func (c *cacher) Set(key, value any) {
 	_, have := c.caches[key]
 	c.lock.RUnlock()
 	if have {
-		c.caches[key].value = value
+		c.caches[key].Value = value
 		defer c._update(key)
 		return
 	}
@@ -58,10 +58,10 @@ START:
 	}
 
 	c.lock.Lock()
-	c.caches[key] = &cacheItem{
-		value:    value,
-		lastTime: _unixNano(),
-		times:    1,
+	c.caches[key] = &CacheItem{
+		Value:    value,
+		LastTime: _unixNano(),
+		Times:    1,
 	}
 	c.lock.Unlock()
 }
@@ -70,9 +70,9 @@ START:
 func (c *cacher) Coldest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
-		if lastKey == nil || item.lastTime <= lastTime && item.times <= times {
-			lastTime = item.lastTime
-			times = item.times
+		if lastKey == nil || item.LastTime <= lastTime && item.Times <= times {
+			lastTime = item.LastTime
+			times = item.Times
 			lastKey = key
 		}
 	}
@@ -84,9 +84,9 @@ func (c *cacher) Coldest() (lastKey any, lastTime int64, times int) {
 func (c *cacher) Hotest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
-		if lastKey == nil || item.lastTime >= lastTime && item.times >= times {
-			lastTime = item.lastTime
-			times = item.times
+		if lastKey == nil || item.LastTime >= lastTime && item.Times >= times {
+			lastTime = item.LastTime
+			times = item.Times
 			lastKey = key
 		}
 	}
@@ -102,15 +102,15 @@ func (c *cacher) Get(key any) (any, bool) {
 
 	if ok {
 		defer c._update(key)
-		return item.value, ok
+		return item.Value, ok
 	}
 	return nil, false
 }
 
 func (c *cacher) _update(key any) {
 	c.lock.Lock()
-	c.caches[key].times++
-	c.caches[key].lastTime = _unixNano()
+	c.caches[key].Times++
+	c.caches[key].LastTime = _unixNano()
 	c.lock.Unlock()
 }
 
@@ -121,7 +121,7 @@ func (c *cacher) Delete(key any) {
 	c.lock.Unlock()
 }
 
-func (c *cacher) DeleteAll(fn func(key any, item *cacheItem) bool) {
+func (c *cacher) DeleteAll(fn func(key any, item *CacheItem) bool) {
 	c.lock.Lock()
 	for key, item := range c.caches {
 		if fn(key, item) {
@@ -153,7 +153,7 @@ func (c *cacher) Values() []any {
 	c.lock.RLock()
 	items := make([]any, 0, len(c.caches))
 	for _, item := range c.caches {
-		items = append(items, item.value)
+		items = append(items, item.Value)
 	}
 	c.lock.RUnlock()
 	return items
@@ -174,7 +174,7 @@ func (c *cacher) Map() map[any]any {
 	c.lock.RLock()
 	m := make(map[any]any, len(c.caches))
 	for key, item := range c.caches {
-		m[key] = item.value
+		m[key] = item.Value
 	}
 	c.lock.RUnlock()
 	return m
