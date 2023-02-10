@@ -84,6 +84,16 @@ func (c *partedCacher) Delete(key any) {
 	c.lazy.Delete(key)
 }
 
+func (c *partedCacher) DeleteAll(keys []any) {
+	c.active.DeleteAll(keys)
+	c.lazy.DeleteAll(keys)
+}
+
+func (c *partedCacher) DeleteAllFn(fn func(key any, value *CacheItem) bool) {
+	c.active.DeleteAllFn(fn)
+	c.lazy.DeleteAllFn(fn)
+}
+
 func (c *partedCacher) IsFull() bool {
 	return c.active.IsFull() && c.lazy.IsFull()
 }

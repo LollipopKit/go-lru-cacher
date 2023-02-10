@@ -6,7 +6,7 @@ import "time"
 func NewDurationCacher(maxLength int, checkDuration time.Duration, fn func(key any, item *CacheItem) bool) *cacher {
 	c := NewCacher(maxLength)
 	for range time.Tick(checkDuration) {
-		go c.DeleteAll(fn)
+		go c.DeleteAllFn(fn)
 	}
 	return c
 }
@@ -15,6 +15,22 @@ func NewDurationCacher(maxLength int, checkDuration time.Duration, fn func(key a
 func NewElapsedCacher(maxLength int, checkDuration, elapsedDuration time.Duration) *cacher {
 	elapsedUnixNano := elapsedDuration.Nanoseconds()
 	c := NewDurationCacher(maxLength, checkDuration, func(key any, item *CacheItem) bool {
+		return _unixNano()-item.LastTime > elapsedUnixNano
+	})
+	return c
+}
+
+func NewPartedDurationCacher(maxLength int, activeRate float64, checkDuration time.Duration, fn func(key any, item *CacheItem) bool) *partedCacher {
+	c := NewPartedCacher(maxLength, activeRate)
+	for range time.Tick(checkDuration) {
+		go c.DeleteAllFn(fn)
+	}
+	return c
+}
+
+func NewPartedElapsedCacher(maxLength int, activeRate float64, checkDuration, elapsedDuration time.Duration) *partedCacher {
+	elapsedUnixNano := elapsedDuration.Nanoseconds()
+	c := NewPartedDurationCacher(maxLength, activeRate, checkDuration, func(key any, item *CacheItem) bool {
 		return _unixNano()-item.LastTime > elapsedUnixNano
 	})
 	return c

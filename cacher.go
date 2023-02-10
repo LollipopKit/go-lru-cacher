@@ -121,7 +121,15 @@ func (c *cacher) Delete(key any) {
 	c.lock.Unlock()
 }
 
-func (c *cacher) DeleteAll(fn func(key any, item *CacheItem) bool) {
+func (c *cacher) DeleteAll(keys []any) {
+	c.lock.Lock()
+	for _, key := range keys {
+		delete(c.caches, key)
+	}
+	c.lock.Unlock()
+}
+
+func (c *cacher) DeleteAllFn(fn func(key any, item *CacheItem) bool) {
 	c.lock.Lock()
 	for key, item := range c.caches {
 		if fn(key, item) {
