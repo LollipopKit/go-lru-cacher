@@ -14,7 +14,7 @@ type CacheItem struct {
 }
 
 // 缓存器
-type cacher struct {
+type Cacher struct {
 	caches    cacheMap
 	lock      *sync.RWMutex
 	maxLength int
@@ -22,12 +22,12 @@ type cacher struct {
 
 // 创建一个缓存器
 // maxLength: 最大缓存长度
-func NewCacher(maxLength int) *cacher {
+func NewCacher(maxLength int) *Cacher {
 	if maxLength <= 0 {
 		panic("maxLength must be greater than 0")
 	}
 
-	return &cacher{
+	return &Cacher{
 		caches:    make(cacheMap, maxLength),
 		maxLength: maxLength,
 		lock:      new(sync.RWMutex),
@@ -35,7 +35,7 @@ func NewCacher(maxLength int) *cacher {
 }
 
 // 添加/更新一个缓存项
-func (c *cacher) Set(key, value any) {
+func (c *Cacher) Set(key, value any) {
 	// key存在，更新
 	c.lock.RLock()
 	_, have := c.caches[key]
@@ -67,7 +67,7 @@ START:
 }
 
 // 返回最早添加、最少使用的项目的键、添加时间、使用次数
-func (c *cacher) Activest() (lastKey any, lastTime int64, times int) {
+func (c *Cacher) Activest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime <= lastTime && item.Times <= times {
@@ -81,7 +81,7 @@ func (c *cacher) Activest() (lastKey any, lastTime int64, times int) {
 }
 
 // 返回最晚添加、最多使用的项目的键、添加时间、使用次数
-func (c *cacher) Laziest() (lastKey any, lastTime int64, times int) {
+func (c *Cacher) Laziest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime >= lastTime && item.Times >= times {
@@ -95,7 +95,7 @@ func (c *cacher) Laziest() (lastKey any, lastTime int64, times int) {
 }
 
 // 获取一个缓存项
-func (c *cacher) Get(key any) (any, bool) {
+func (c *Cacher) Get(key any) (any, bool) {
 	c.lock.RLock()
 	item, ok := c.caches[key]
 	c.lock.RUnlock()
@@ -107,7 +107,7 @@ func (c *cacher) Get(key any) (any, bool) {
 	return nil, false
 }
 
-func (c *cacher) _update(key any) {
+func (c *Cacher) _update(key any) {
 	c.lock.Lock()
 	c.caches[key].Times++
 	c.caches[key].LastTime = _unixNano()
@@ -115,13 +115,13 @@ func (c *cacher) _update(key any) {
 }
 
 // 删除缓存项
-func (c *cacher) Delete(key any) {
+func (c *Cacher) Delete(key any) {
 	c.lock.Lock()
 	delete(c.caches, key)
 	c.lock.Unlock()
 }
 
-func (c *cacher) DeleteAll(keys []any) {
+func (c *Cacher) DeleteAll(keys []any) {
 	c.lock.Lock()
 	for _, key := range keys {
 		delete(c.caches, key)
@@ -129,7 +129,7 @@ func (c *cacher) DeleteAll(keys []any) {
 	c.lock.Unlock()
 }
 
-func (c *cacher) DeleteAllFn(fn func(key any, item *CacheItem) bool) {
+func (c *Cacher) DeleteAllFn(fn func(key any, item *CacheItem) bool) {
 	c.lock.Lock()
 	for key, item := range c.caches {
 		if fn(key, item) {
@@ -140,24 +140,24 @@ func (c *cacher) DeleteAllFn(fn func(key any, item *CacheItem) bool) {
 }
 
 // 清空
-func (c *cacher) Clear() {
+func (c *Cacher) Clear() {
 	c.lock.Lock()
 	c.caches = make(cacheMap, c.maxLength)
 	c.lock.Unlock()
 }
 
 // 获取缓存项数量
-func (c *cacher) Len() int {
+func (c *Cacher) Len() int {
 	return len(c.caches)
 }
 
 // 是否存满
-func (c *cacher) IsFull() bool {
+func (c *Cacher) IsFull() bool {
 	return c.Len() >= c.maxLength
 }
 
 // 获取所有值
-func (c *cacher) Values() []any {
+func (c *Cacher) Values() []any {
 	c.lock.RLock()
 	items := make([]any, 0, len(c.caches))
 	for _, item := range c.caches {
@@ -168,7 +168,7 @@ func (c *cacher) Values() []any {
 }
 
 // 获取所有键
-func (c *cacher) Keys() []any {
+func (c *Cacher) Keys() []any {
 	c.lock.RLock()
 	keys := make([]any, 0, len(c.caches))
 	for key := range c.caches {
@@ -178,7 +178,7 @@ func (c *cacher) Keys() []any {
 	return keys
 }
 
-func (c *cacher) Map() map[any]any {
+func (c *Cacher) Map() map[any]any {
 	c.lock.RLock()
 	m := make(map[any]any, len(c.caches))
 	for key, item := range c.caches {
