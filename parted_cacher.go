@@ -1,26 +1,32 @@
-package cacher
+package golrucacher
 
 type partedCacher struct {
-	// 逻辑：
-	// 先把active写满，再写lazy
-	// active写满，将active的最近、使用最多的缓存项“移动”到lazy
-	// active写满，lazy写满，删除lazy中最早、使用最少的缓存项，移动active的最近、使用最多的缓存项到lazy
+	// 如果有部分数据一直被读取，可以使用 `lazy / active` 分区的缓存器，这样可以提高缓存命中率。
+	// ### 逻辑
+	// - 先把 `active` 写满，再写 `lazy`
+	// - `active` 写满时写入，先将` active` 的最近、使用最多的缓存项“移动”到 `lazy`，再写入 `active`
+	// - `active` 写满时写入，`lazy` 写满，删除 `lazy` 中最早、使用最少的缓存项，移动 `active` 的最近、使用最多的缓存项到 `lazy`，再写入 `active`
 
-	active *cacher // 最近的，“删”时优先处理该部分
-	lazy   *cacher // 低优先级的，“查”时优先处理该部分
+	active     *cacher // 最近的，“删”时优先处理该部分
+	lazy       *cacher // 低优先级的，“查”时优先处理该部分
+	activeRate float64 // active 部分的占比
 }
 
-func NewPartedCacher(maxLength int) *partedCacher {
-	r, l := _calcMaxLength(maxLength)
+// [activeRate]: 0 < activeRate < 1, activeRate = activeLen / maxLength
+func NewPartedCacher(maxLength int, activeRate float64) *partedCacher {
+	if activeRate <= 0 || activeRate >= 1 {
+		panic("lazyRate must be in (0, 1)")
+	}
+	a, l := _calcMaxLength(maxLength, activeRate)
 
 	return &partedCacher{
-		active: NewCacher(r),
+		active: NewCacher(a),
 		lazy:   NewCacher(l),
 	}
 }
 
 func (c *partedCacher) Set(key, value any) {
-	if (c.lazy.caches[key] != nil) {
+	if c.lazy.caches[key] != nil {
 		c.lazy.Set(key, value)
 		return
 	}
@@ -29,6 +35,10 @@ func (c *partedCacher) Set(key, value any) {
 		return
 	}
 
+	// active满：
+	// 1、删除lazy中最早、使用最少的缓存项
+	// 2、移动active的最近、使用最多的缓存项到lazy
+	// 3、将新增项目添加到active
 	delKeyInActive, lTime, lTimes := c.active.Hotest()
 	v, ok := c.active.Get(delKeyInActive)
 	if !c.lazy.IsFull() {
