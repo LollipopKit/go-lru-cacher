@@ -7,8 +7,8 @@ type partedCacher struct {
 	// - `active` 写满时写入，先将` active` 的最近、使用最多的缓存项“移动”到 `lazy`，再写入 `active`
 	// - `active` 写满时写入，`lazy` 写满，删除 `lazy` 中最早、使用最少的缓存项，移动 `active` 的最近、使用最多的缓存项到 `lazy`，再写入 `active`
 
-	active     *cacher // 最近的，“删”时优先处理该部分
-	lazy       *cacher // 低优先级的，“查”时优先处理该部分
+	active     *cacher // “删”时优先处理该部分
+	lazy       *cacher // “查”时优先处理该部分
 	activeRate float64 // active 部分的占比
 }
 
@@ -39,7 +39,7 @@ func (c *partedCacher) Set(key, value any) {
 	// 1、删除lazy中最早、使用最少的缓存项
 	// 2、移动active的最近、使用最多的缓存项到lazy
 	// 3、将新增项目添加到active
-	delKeyInActive, lTime, lTimes := c.active.Hotest()
+	delKeyInActive, lTime, lTimes := c.active.Laziest()
 	v, ok := c.active.Get(delKeyInActive)
 	if !c.lazy.IsFull() {
 		if ok {
@@ -56,7 +56,7 @@ func (c *partedCacher) Set(key, value any) {
 	// 1、删除lazy中最早、使用最少的缓存项
 	// 2、移动active的最近、使用最多的缓存项到lazy
 	// 3、将新增项目添加到active
-	delKeyInLazy, eTime, eTimes := c.lazy.Coldest()
+	delKeyInLazy, eTime, eTimes := c.lazy.Activest()
 	if eTime <= lTime || eTimes <= lTimes { // FIFO：先进先出，所以包含等于
 		c.lazy.Delete(delKeyInLazy)
 		c.lazy.Set(delKeyInActive, v)
@@ -92,6 +92,14 @@ func (c *partedCacher) DeleteAll(keys []any) {
 func (c *partedCacher) DeleteAllFn(fn func(key any, value *CacheItem) bool) {
 	c.active.DeleteAllFn(fn)
 	c.lazy.DeleteAllFn(fn)
+}
+
+func (c *partedCacher) DeleteLazy(key any) {
+	c.lazy.Delete(key)
+}
+
+func (c *partedCacher) DeleteLazyAll(keys []any) {
+	c.lazy.DeleteAll(keys)
 }
 
 func (c *partedCacher) IsFull() bool {

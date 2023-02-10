@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	maxLength = 10
-	activeRate  = 0.8
+	maxLength  = 10
+	activeRate = 0.8
 )
 
 var (
@@ -62,7 +62,7 @@ func TestCacher(t *testing.T) {
 	}
 	cacher.Get(2)
 	for i := 0; i < maxLength-1; i++ {
-		k, _, _ := cacher.Coldest()
+		k, _, _ := cacher.Activest()
 		cacher.Delete(k)
 	}
 	if two, ok := cacher.Get(2); two != 2 && !ok {
@@ -76,8 +76,8 @@ func TestPartedCacher(t *testing.T) {
 		partedCacher.Set(i, i)
 	}
 
-	for i := 0; i < maxLength * activeRate; i++ {
-		partedCacher.Set(i, i + 100)
+	for i := 0; i < maxLength*activeRate; i++ {
+		partedCacher.Set(i, i+100)
 	}
 
 	if v, ok := partedCacher.Get(8); v != 8 || !ok {

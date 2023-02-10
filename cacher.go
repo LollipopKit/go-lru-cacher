@@ -49,7 +49,7 @@ func (c *cacher) Set(key, value any) {
 	// key不存在，添加。
 START:
 	if c.IsFull() {
-		k, _, _ := c.Coldest()
+		k, _, _ := c.Activest()
 		c.lock.Lock()
 		delete(c.caches, k)
 		c.lock.Unlock()
@@ -67,7 +67,7 @@ START:
 }
 
 // 返回最早添加、最少使用的项目的键、添加时间、使用次数
-func (c *cacher) Coldest() (lastKey any, lastTime int64, times int) {
+func (c *cacher) Activest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime <= lastTime && item.Times <= times {
@@ -81,7 +81,7 @@ func (c *cacher) Coldest() (lastKey any, lastTime int64, times int) {
 }
 
 // 返回最晚添加、最多使用的项目的键、添加时间、使用次数
-func (c *cacher) Hotest() (lastKey any, lastTime int64, times int) {
+func (c *cacher) Laziest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime >= lastTime && item.Times >= times {
