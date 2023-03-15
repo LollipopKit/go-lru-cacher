@@ -42,7 +42,7 @@ func (c *Cacher) Set(key, value any) {
 	c.lock.RUnlock()
 	if have {
 		c.caches[key].Value = value
-		defer c._update(key)
+		go c.update(key)
 		return
 	}
 
@@ -60,7 +60,7 @@ START:
 	c.lock.Lock()
 	c.caches[key] = &CacheItem{
 		Value:    value,
-		LastTime: _unixNano(),
+		LastTime: unixNano(),
 		Times:    1,
 	}
 	c.lock.Unlock()
@@ -70,7 +70,7 @@ START:
 func (c *Cacher) Activest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
-		if lastKey == nil || item.LastTime <= lastTime && item.Times <= times {
+		if lastKey == nil || item.LastTime <= lastTime || item.Times <= times {
 			lastTime = item.LastTime
 			times = item.Times
 			lastKey = key
@@ -84,7 +84,7 @@ func (c *Cacher) Activest() (lastKey any, lastTime int64, times int) {
 func (c *Cacher) Laziest() (lastKey any, lastTime int64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
-		if lastKey == nil || item.LastTime >= lastTime && item.Times >= times {
+		if lastKey == nil || item.LastTime >= lastTime || item.Times >= times {
 			lastTime = item.LastTime
 			times = item.Times
 			lastKey = key
@@ -101,16 +101,20 @@ func (c *Cacher) Get(key any) (any, bool) {
 	c.lock.RUnlock()
 
 	if ok {
-		defer c._update(key)
-		return item.Value, ok
+		go c.update(key)
+		return item.Value, true
 	}
 	return nil, false
 }
 
-func (c *Cacher) _update(key any) {
+func (c *Cacher) update(key any) {
+	_, ok := c.caches[key]
+	if !ok {
+		return
+	}
 	c.lock.Lock()
 	c.caches[key].Times++
-	c.caches[key].LastTime = _unixNano()
+	c.caches[key].LastTime = unixNano()
 	c.lock.Unlock()
 }
 
@@ -186,4 +190,29 @@ func (c *Cacher) Map() map[any]any {
 	}
 	c.lock.RUnlock()
 	return m
+}
+
+func (c *Cacher) changeLen(len int) (overflow cacheMap) {
+	if len >= c.maxLength {
+		c.maxLength = len
+		return nil
+	}
+
+	overflowCount := c.maxLength - len
+	overflow = make(cacheMap, overflowCount)
+	for i := 0; i < overflowCount; i++ {
+		k, _, _ := c.Activest()
+		overflow[k] = c.caches[k]
+		c.Delete(k)
+	}
+	c.maxLength = len
+	return
+}
+
+func (c *Cacher) addCacheMap(m cacheMap) {
+	c.lock.Lock()
+	for k, v := range m {
+		c.caches[k] = v
+	}
+	c.lock.Unlock()
 }

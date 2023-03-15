@@ -7,127 +7,248 @@ type PartedCacher struct {
 	// - `active` 写满时写入，先将` active` 的最近、使用最多的缓存项“移动”到 `lazy`，再写入 `active`
 	// - `active` 写满时写入，`lazy` 写满，删除 `lazy` 中最早、使用最少的缓存项，移动 `active` 的最近、使用最多的缓存项到 `lazy`，再写入 `active`
 
-	active     *Cacher // “删”时优先处理该部分
-	lazy       *Cacher // “查”时优先处理该部分
-	activeRate float64 // active 部分的占比
+	ActiveCacher *Cacher // “删”时优先处理该部分
+	LazyCacher   *Cacher // “查”时优先处理该部分
+	maxLen       int
+	activeRate   float64 // 其值为 activeLen / maxLength
 }
 
 // [activeRate]: 0 < activeRate < 1, activeRate = activeLen / maxLength
 func NewPartedCacher(maxLength int, activeRate float64) *PartedCacher {
 	if activeRate <= 0 || activeRate >= 1 {
-		panic("lazyRate must be in (0, 1)")
+		panic("activeRate must be in (0, 1)")
 	}
-	a, l := _calcMaxLength(maxLength, activeRate)
+	a, l := calcMaxLength(maxLength, activeRate)
 
 	return &PartedCacher{
-		active: NewCacher(a),
-		lazy:   NewCacher(l),
+		ActiveCacher: NewCacher(a),
+		LazyCacher:   NewCacher(l),
+		maxLen:       maxLength,
+		activeRate:   activeRate,
 	}
+}
+
+func (c *PartedCacher) AdjustRate(rate float64) bool {
+	diffRate := c.activeRate - rate
+	rate = c.activeRate - diffRate/2
+
+	aLen, lLen := calcMaxLength(c.maxLen, rate)
+	if aLen != c.ActiveCacher.maxLength {
+		if aLen > c.ActiveCacher.maxLength {
+			c.ActiveCacher.changeLen(aLen)
+			c.ActiveCacher.addCacheMap(c.LazyCacher.changeLen(lLen))
+		} else {
+			c.LazyCacher.changeLen(lLen)
+			c.LazyCacher.addCacheMap(c.ActiveCacher.changeLen(aLen))
+		}
+		println()
+		c.activeRate = rate
+		return true
+	}
+	return false
+}
+
+func (c *PartedCacher) moveActive2Lazy(keyA, keyL any) bool {
+	cacheItemA, ok := c.ActiveCacher.caches[keyA]
+	if !ok {
+		return false
+	}
+	cacheItemL, ok := c.LazyCacher.caches[keyL]
+	if !ok {
+		return false
+	}
+
+	c.LazyCacher.Delete(keyL)
+	c.ActiveCacher.Delete(keyA)
+
+	c.LazyCacher.lock.Lock()
+	c.LazyCacher.caches[keyA] = cacheItemA
+	c.LazyCacher.lock.Unlock()
+
+	c.ActiveCacher.lock.Lock()
+	c.ActiveCacher.caches[keyL] = cacheItemL
+	c.ActiveCacher.lock.Unlock()
+
+	return true
+}
+
+func (c *PartedCacher) moveLazy2Active(keyA, keyL any) bool {
+	cacheItemA, ok := c.ActiveCacher.caches[keyA]
+	if !ok {
+		return false
+	}
+	cacheItemL, ok := c.LazyCacher.caches[keyL]
+	if !ok {
+		return false
+	}
+
+	c.LazyCacher.Delete(keyL)
+	c.ActiveCacher.Delete(keyA)
+
+	c.ActiveCacher.lock.Lock()
+	c.ActiveCacher.caches[keyL] = cacheItemL
+	c.ActiveCacher.lock.Unlock()
+
+	c.LazyCacher.lock.Lock()
+	c.LazyCacher.caches[keyA] = cacheItemA
+	c.LazyCacher.lock.Unlock()
+
+	return true
 }
 
 func (c *PartedCacher) Set(key, value any) {
-	if c.lazy.caches[key] != nil {
-		c.lazy.Set(key, value)
-		return
-	}
-	if !c.active.IsFull() {
-		c.active.Set(key, value)
+	// 不能使用 `Cacher.Get(key)`
+	// 因为会导致其 `LastTime` 和 `Times` 更新
+	if c.LazyCacher.caches[key] != nil {
+		c.LazyCacher.Set(key, value)
 		return
 	}
 
-	// active满：
-	// 1、删除lazy中最早、使用最少的缓存项
-	// 2、移动active的最近、使用最多的缓存项到lazy
-	// 3、将新增项目添加到active
-	delKeyInActive, lTime, lTimes := c.active.Laziest()
-	v, ok := c.active.Get(delKeyInActive)
-	if !c.lazy.IsFull() {
+	// `active` 未满
+	if !c.ActiveCacher.IsFull() {
+		c.ActiveCacher.Set(key, value)
+		return
+	}
+
+	delKeyInActive, aTime, aTimes := c.ActiveCacher.Laziest()
+	v, ok := c.ActiveCacher.Get(delKeyInActive)
+
+	// active满，但lazy未满：
+	if !c.LazyCacher.IsFull() {
 		if ok {
-			c.lazy.Set(delKeyInActive, v)
-			c.active.Delete(delKeyInActive)
-			c.Set(key, value)
-		} else {
-			c.active.Set(key, value)
+			// 1、移动active的最近、使用最多的缓存项到lazy
+			c.LazyCacher.Set(delKeyInActive, v)
+			// 2、删除active中最早添加、使用最多的缓存项
+			c.ActiveCacher.Delete(delKeyInActive)
 		}
+		// 3、将新增项目添加到active
+		c.ActiveCacher.Set(key, value)
 		return
 	}
 
-	// lazy满：
-	// 1、删除lazy中最早、使用最少的缓存项
-	// 2、移动active的最近、使用最多的缓存项到lazy
-	// 3、将新增项目添加到active
-	delKeyInLazy, eTime, eTimes := c.lazy.Activest()
-	if eTime <= lTime || eTimes <= lTimes { // FIFO：先进先出，所以包含等于
-		c.lazy.Delete(delKeyInLazy)
-		c.lazy.Set(delKeyInActive, v)
-		c.active.Delete(delKeyInActive)
-		c.Set(key, value)
+	delKeyInLazy, lTime, lTimes := c.LazyCacher.Activest()
+
+	// lazy满
+	// 且lazy中最早、使用最少的缓存项
+	// 比
+	// active中最近、使用最多的缓存项更早、使用更少
+	if lTime <= aTime || lTimes <= aTimes { // FIFO：先进先出，所以包含等于
+		c.moveActive2Lazy(delKeyInActive, delKeyInLazy)
+		// 将新增项目添加到active
+		c.ActiveCacher.Set(key, value)
 		return
 	}
 
-	// lazy满，但lazy中最早、使用最少的缓存项不是active中最近、使用最多的缓存项
+	// lazy满
+	// 但lazy中最早、使用最少的缓存项
+	// 比
+	// active中最近、使用最多的缓存项更近、使用更多
 	// 所以，只需将新增项目添加到active
-	c.active.Set(key, value)
+	c.ActiveCacher.Set(key, value)
 }
 
 func (c *PartedCacher) Get(key any) (any, bool) {
-	v, ok := c.lazy.Get(key)
+	v, ok := c.LazyCacher.Get(key)
 	if ok {
 		return v, ok
 	}
 
-	return c.active.Get(key)
+	value, ok := c.ActiveCacher.Get(key)
+	if ok {
+		delKeyInActive, lTime, lTimes := c.ActiveCacher.Laziest()
+		delKeyInLazy, aTime, aTimes := c.LazyCacher.Activest()
+		if aTime <= lTime || aTimes <= lTimes { // FIFO：先进先出，所以包含等于
+			// 1、删除lazy中最早、使用最少的缓存项
+			c.LazyCacher.Delete(delKeyInLazy)
+			// 2、移动active的最近、使用最多的缓存项到lazy
+			c.LazyCacher.Set(delKeyInActive, value)
+			c.ActiveCacher.Delete(delKeyInActive)
+		}
+	}
+	return value, ok
 }
 
 func (c *PartedCacher) Delete(key any) {
-	c.active.Delete(key)
-	c.lazy.Delete(key)
+	c.ActiveCacher.Delete(key)
+	c.LazyCacher.Delete(key)
 }
 
 func (c *PartedCacher) DeleteAll(keys []any) {
-	c.active.DeleteAll(keys)
-	c.lazy.DeleteAll(keys)
+	c.ActiveCacher.DeleteAll(keys)
+	c.LazyCacher.DeleteAll(keys)
 }
 
 func (c *PartedCacher) DeleteAllFn(fn func(key any, value *CacheItem) bool) {
-	c.active.DeleteAllFn(fn)
-	c.lazy.DeleteAllFn(fn)
+	c.ActiveCacher.DeleteAllFn(fn)
+	c.LazyCacher.DeleteAllFn(fn)
 }
 
 func (c *PartedCacher) DeleteLazy(key any) {
-	c.lazy.Delete(key)
+	c.LazyCacher.Delete(key)
 }
 
 func (c *PartedCacher) DeleteLazyAll(keys []any) {
-	c.lazy.DeleteAll(keys)
+	c.LazyCacher.DeleteAll(keys)
 }
 
 func (c *PartedCacher) IsFull() bool {
-	return c.active.IsFull() && c.lazy.IsFull()
+	return c.ActiveCacher.IsFull() && c.LazyCacher.IsFull()
 }
 
 func (c *PartedCacher) Clear() {
-	c.active.Clear()
-	c.lazy.Clear()
+	c.ActiveCacher.Clear()
+	c.LazyCacher.Clear()
 }
 
 func (c *PartedCacher) Len() int {
-	return c.active.Len() + c.lazy.Len()
+	return c.ActiveCacher.Len() + c.LazyCacher.Len()
 }
 
 func (c *PartedCacher) Keys() []any {
-	return append(c.active.Keys(), c.lazy.Keys()...)
+	return append(c.ActiveCacher.Keys(), c.LazyCacher.Keys()...)
 }
 
 func (c *PartedCacher) Values() []any {
-	return append(c.active.Values(), c.lazy.Values()...)
+	return append(c.ActiveCacher.Values(), c.LazyCacher.Values()...)
 }
 
 func (c *PartedCacher) Map() map[any]any {
-	aMap := c.active.Map()
-	lMap := c.lazy.Map()
+	aMap := c.ActiveCacher.Map()
+	lMap := c.LazyCacher.Map()
 	for k := range lMap {
 		aMap[k] = lMap[k]
 	}
 	return aMap
+}
+
+func (c *PartedCacher) PartedMap() map[string]map[any]any {
+	aMap := c.ActiveCacher.Map()
+	lMap := c.LazyCacher.Map()
+	m := map[string]map[any]any{"active": {}, "lazy": {}}
+	for k := range lMap {
+		m["lazy"][k] = lMap[k]
+	}
+	for k := range aMap {
+		m["active"][k] = aMap[k]
+	}
+	return m
+}
+
+type partedList struct {
+	Active []any
+	Lazy   []any
+}
+
+func (c *PartedCacher) PartedKeys() *partedList {
+	return &partedList{
+		Active: c.ActiveCacher.Keys(),
+		Lazy:   c.LazyCacher.Keys(),
+	}
+}
+
+func (c *PartedCacher) PartedValues() *partedList {
+	return &partedList{
+		Active: c.ActiveCacher.Values(),
+		Lazy:   c.LazyCacher.Values(),
+	}
 }

@@ -15,7 +15,7 @@ func NewDurationCacher(maxLength int, checkDuration time.Duration, fn func(key a
 func NewElapsedCacher(maxLength int, checkDuration, elapsedDuration time.Duration) *Cacher {
 	elapsedUnixNano := elapsedDuration.Nanoseconds()
 	c := NewDurationCacher(maxLength, checkDuration, func(key any, item *CacheItem) bool {
-		return _unixNano()-item.LastTime > elapsedUnixNano
+		return unixNano()-item.LastTime > elapsedUnixNano
 	})
 	return c
 }
@@ -31,7 +31,7 @@ func NewPartedDurationCacher(maxLength int, activeRate float64, checkDuration ti
 func NewPartedElapsedCacher(maxLength int, activeRate float64, checkDuration, elapsedDuration time.Duration) *PartedCacher {
 	elapsedUnixNano := elapsedDuration.Nanoseconds()
 	c := NewPartedDurationCacher(maxLength, activeRate, checkDuration, func(key any, item *CacheItem) bool {
-		return _unixNano()-item.LastTime > elapsedUnixNano
+		return unixNano()-item.LastTime > elapsedUnixNano
 	})
 	return c
 }
