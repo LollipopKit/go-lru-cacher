@@ -22,9 +22,11 @@ func NewElapsedCacher(maxLength int, checkDuration, elapsedDuration time.Duratio
 
 func NewPartedDurationCacher(maxLength int, activeRate float64, checkDuration time.Duration, fn func(key any, item *CacheItem) bool) *PartedCacher {
 	c := NewPartedCacher(maxLength, activeRate)
-	for range time.Tick(checkDuration) {
-		go c.DeleteAllFn(fn)
-	}
+	go func(){
+		for range time.Tick(checkDuration) {
+			c.DeleteAllFn(fn)
+		}
+	}()
 	return c
 }
 
