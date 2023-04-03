@@ -5,7 +5,7 @@
 package main
 
 import (
-    glc "git.lolli.tech/lollipopkit/go-lru-cacher"
+    glc "github.com/lollipopkit/go-lru-cacher"
 )
 
 func main() {

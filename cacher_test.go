@@ -3,7 +3,7 @@ package golrucacher_test
 import (
 	"testing"
 
-	glc "git.lolli.tech/lollipopkit/go-lru-cacher"
+	glc "github.com/lollipopkit/go-lru-cacher"
 )
 
 const (
