@@ -39,7 +39,7 @@ func main() {
 
 ### 逻辑
 - 先把 `active` 写满，再写 `lazy`
-- `active` 写满时写入，先将` active` 的最近、使用最多的缓存项“移动”到 `lazy`，再写入 `active`
+- `active` 写满时写入，先将 `active` 的最近、使用最多的缓存项“移动”到 `lazy`，再写入 `active`
 - `active` 写满时写入，`lazy` 写满，删除 `lazy` 中最早、使用最少的缓存项，移动 `active` 的最近、使用最多的缓存项到 `lazy`，再写入 `active`
 
 ### 使用
