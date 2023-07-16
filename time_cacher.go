@@ -3,7 +3,7 @@ package golrucacher
 import "time"
 
 // 返回一个缓存器，每经过 duration 调用一次 fn 自定义清理缓存项
-func NewDurationCacher[T any](maxLength int, checkDuration time.Duration, fn func(key any, item *CacheItem[T]) bool) *cacher[T] {
+func NewDurationCacher[T any](maxLength int, checkDuration time.Duration, fn func(key any, item *CacheItem[T]) bool) *Cacher[T] {
 	c := NewCacher[T](maxLength)
 	go func() {
 		for range time.Tick(checkDuration) {
@@ -14,7 +14,7 @@ func NewDurationCacher[T any](maxLength int, checkDuration time.Duration, fn fun
 }
 
 // 每过 checkDuration 检查一次，间隔超过 elapsedDuration 的缓存项将被清理
-func NewElapsedCacher[T any](maxLength int, checkDuration, elapsedDuration time.Duration) *cacher[T] {
+func NewElapsedCacher[T any](maxLength int, checkDuration, elapsedDuration time.Duration) *Cacher[T] {
 	elapsedUnixNano := float64(elapsedDuration.Microseconds())
 	c := NewDurationCacher(maxLength, checkDuration, func(key any, item *CacheItem[T]) bool {
 		return getTime()-item.LastTime > elapsedUnixNano

@@ -15,7 +15,7 @@ type CacheItem[T any] struct {
 }
 
 // 缓存器
-type cacher[T any] struct {
+type Cacher[T any] struct {
 	caches    cacheMap[T]
 	lock      *sync.RWMutex
 	maxLength int
@@ -23,12 +23,12 @@ type cacher[T any] struct {
 
 // 创建一个缓存器
 // maxLength: 最大缓存长度
-func NewCacher[T any](maxLength int) *cacher[T] {
+func NewCacher[T any](maxLength int) *Cacher[T] {
 	if maxLength <= 0 {
 		panic("maxLength must be greater than 0")
 	}
 
-	return &cacher[T]{
+	return &Cacher[T]{
 		caches:    make(cacheMap[T], maxLength),
 		maxLength: maxLength,
 		lock:      new(sync.RWMutex),
@@ -36,7 +36,7 @@ func NewCacher[T any](maxLength int) *cacher[T] {
 }
 
 // 添加/更新一个缓存项
-func (c *cacher[T]) Set(key any, value *T) {
+func (c *Cacher[T]) Set(key any, value *T) {
 	// key存在，更新
 	c.lock.RLock()
 	_, have := c.caches[key]
@@ -68,7 +68,7 @@ START:
 }
 
 // 返回最早添加、最少使用的项目的键、添加时间、使用次数
-func (c *cacher[T]) Activest() (lastKey any, lastTime float64, times int) {
+func (c *Cacher[T]) Activest() (lastKey any, lastTime float64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime <= lastTime || item.Times <= times {
@@ -82,7 +82,7 @@ func (c *cacher[T]) Activest() (lastKey any, lastTime float64, times int) {
 }
 
 // 返回最晚添加、最多使用的项目的键、添加时间、使用次数
-func (c *cacher[T]) Laziest() (lastKey any, lastTime float64, times int) {
+func (c *Cacher[T]) Laziest() (lastKey any, lastTime float64, times int) {
 	c.lock.RLock()
 	for key, item := range c.caches {
 		if lastKey == nil || item.LastTime >= lastTime || item.Times >= times {
@@ -96,7 +96,7 @@ func (c *cacher[T]) Laziest() (lastKey any, lastTime float64, times int) {
 }
 
 // 获取一个缓存项
-func (c *cacher[T]) Get(key any) (*T, bool) {
+func (c *Cacher[T]) Get(key any) (*T, bool) {
 	c.lock.RLock()
 	item, ok := c.caches[key]
 	c.lock.RUnlock()
@@ -108,7 +108,7 @@ func (c *cacher[T]) Get(key any) (*T, bool) {
 	return nil, false
 }
 
-func (c *cacher[T]) update(key any) {
+func (c *Cacher[T]) update(key any) {
 	_, ok := c.caches[key]
 	if !ok {
 		return
@@ -120,13 +120,13 @@ func (c *cacher[T]) update(key any) {
 }
 
 // 删除缓存项
-func (c *cacher[T]) Delete(key any) {
+func (c *Cacher[T]) Delete(key any) {
 	c.lock.Lock()
 	delete(c.caches, key)
 	c.lock.Unlock()
 }
 
-func (c *cacher[T]) DeleteAll(keys []any) {
+func (c *Cacher[T]) DeleteAll(keys []any) {
 	c.lock.Lock()
 	for _, key := range keys {
 		delete(c.caches, key)
@@ -134,7 +134,7 @@ func (c *cacher[T]) DeleteAll(keys []any) {
 	c.lock.Unlock()
 }
 
-func (c *cacher[T]) DeleteAllFn(fn func(key any, item *CacheItem[T]) bool) {
+func (c *Cacher[T]) DeleteAllFn(fn func(key any, item *CacheItem[T]) bool) {
 	c.lock.Lock()
 	for key, item := range c.caches {
 		if fn(key, item) {
@@ -145,24 +145,24 @@ func (c *cacher[T]) DeleteAllFn(fn func(key any, item *CacheItem[T]) bool) {
 }
 
 // 清空
-func (c *cacher[T]) Clear() {
+func (c *Cacher[T]) Clear() {
 	c.lock.Lock()
 	c.caches = make(cacheMap[T], c.maxLength)
 	c.lock.Unlock()
 }
 
 // 获取缓存项数量
-func (c *cacher[T]) Len() int {
+func (c *Cacher[T]) Len() int {
 	return len(c.caches)
 }
 
 // 是否存满
-func (c *cacher[T]) IsFull() bool {
+func (c *Cacher[T]) IsFull() bool {
 	return c.Len() >= c.maxLength
 }
 
 // 获取所有值
-func (c *cacher[T]) Values() []*T {
+func (c *Cacher[T]) Values() []*T {
 	c.lock.RLock()
 	items := make([]*T, 0, len(c.caches))
 	for _, item := range c.caches {
@@ -173,7 +173,7 @@ func (c *cacher[T]) Values() []*T {
 }
 
 // 获取所有键
-func (c *cacher[T]) Keys() []any {
+func (c *Cacher[T]) Keys() []any {
 	c.lock.RLock()
 	keys := make([]any, 0, len(c.caches))
 	for key := range c.caches {
@@ -183,7 +183,7 @@ func (c *cacher[T]) Keys() []any {
 	return keys
 }
 
-func (c *cacher[T]) Map() kvMap[T] {
+func (c *Cacher[T]) Map() kvMap[T] {
 	c.lock.RLock()
 	m := make(kvMap[T], len(c.caches))
 	for key, item := range c.caches {
@@ -193,24 +193,25 @@ func (c *cacher[T]) Map() kvMap[T] {
 	return m
 }
 
-func (c *cacher[T]) changeLen(len int) (overflow cacheMap[T]) {
+// if len < c.maxLength, return overflow
+func (c *Cacher[T]) changeLen(len int) cacheMap[T] {
 	if len >= c.maxLength {
 		c.maxLength = len
 		return nil
 	}
 
 	overflowCount := c.maxLength - len
-	overflow = make(cacheMap[T], overflowCount)
+	overflow := make(cacheMap[T], overflowCount)
 	for i := 0; i < overflowCount; i++ {
 		k, _, _ := c.Activest()
 		overflow[k] = c.caches[k]
 		c.Delete(k)
 	}
 	c.maxLength = len
-	return
+	return overflow
 }
 
-func (c *cacher[T]) addCacheMap(m cacheMap[T]) {
+func (c *Cacher[T]) addCacheMap(m cacheMap[T]) {
 	c.lock.Lock()
 	for k, v := range m {
 		c.caches[k] = v
